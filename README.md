@@ -1,4 +1,4 @@
-- 👋 Hi, I’m @dayduh
+- 👋 Hi, I’m @dayduh *Max Batsch
 - 👀 I’m interested in leveraging big data to glean insights on a number of different aspects of life. Some of my particular interests are machine learning and neural networks. 
 - 🌱 I’m currently learning how to more effectively turn data into a story that will move people and institutions.
 - 💞️ I’m looking to collaborate on projects that both challenge me and utilize skills previously learned in my previous stats and machine learning courses.
