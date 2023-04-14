@@ -1,0 +1,221 @@
+---
+title: "St Margarets LAX Team Builder and Catapult Analysis"
+output:
+  html_document: default
+  pdf_document: default
+date: '2023-04-10'
+---
+
+## Load and Clean the data
+
+```{r setup, include=FALSE}
+
+# LOAD and CLEAN
+
+library(tidyverse)
+library(ggrepel)     
+library(ggcorrplot)
+library(readxl)
+
+
+
+team_bldr <- read_xls("Boys LAX Teambuildr.xls")
+catapult <- read_excel("Catapult-Export-1679504982832.xlsx")
+
+##########################################################################
+# WEIGHT ROOM ANALYSIS
+##########################################################################
+team_bldr$`Player Name` <- paste(team_bldr$`First Name`, team_bldr$`Last Name`)
+
+# Get estimated max with bryzcki equation: https://www.nfpt.com/blog/calculating-a-clients-1rm#:~:text=This%20formula%20states%20that%20an,performed%20for%20the%20given%20exercise.
+team_bldr <- team_bldr %>%
+  mutate(est_max_1  = `Result 1`  / ((1.0278) - (0.0278 * `Reps 1`)),
+         est_max_2  = `Result 2`  / ((1.0278) - (0.0278 * `Reps 2`)),
+         est_max_3  = `Result 3`  / ((1.0278) - (0.0278 * `Reps 3`)),
+         est_max_4  = `Result 4`  / ((1.0278) - (0.0278 * `Reps 4`)),
+         est_max_5  = `Result 5`  / ((1.0278) - (0.0278 * `Reps 5`)),
+         est_max_6  = `Result 6`  / ((1.0278) - (0.0278 * `Reps 6`)),
+         est_max_7  = `Result 7`  / ((1.0278) - (0.0278 * `Reps 7`)),
+         est_max_8  = `Result 8`  / ((1.0278) - (0.0278 * `Reps 8`)),
+         est_max_9  = `Result 9`  / ((1.0278) - (0.0278 * `Reps 9`)),
+         est_max_10 = `Result 10` / ((1.0278) - (0.0278 * `Reps 10`)))
+
+# Get max weight lifted
+team_bldr <- team_bldr %>%
+  mutate(est_max_weight=pmax(`est_max_1`,
+                         `est_max_2`, 
+                         `est_max_3`,
+                         `est_max_4`,
+                         `est_max_5`,
+                         `est_max_6`,
+                         `est_max_7`,
+                         `est_max_8`,
+                         `est_max_9`,
+                         `est_max_10`, na.rm = TRUE))
+# Get max weight lifted 
+team_bldr <- team_bldr %>%
+  mutate(max_weight=pmax(`Result 1`,
+                         `Result 2`, 
+                         `Result 3`,
+                         `Result 4`,
+                         `Result 5`,
+                         `Result 6`,
+                         `Result 7`,
+                         `Result 8`,
+                         `Result 9`,
+                         `Result 10`, na.rm = TRUE))
+
+
+# Get max weight weight and max weight adjusted for reps done
+athlete_summary <- team_bldr %>%
+  group_by(`Player Name`, `Exercise Name`) %>%
+  summarise(max_weight_rep_adjusted = max(est_max_weight),
+            max_weight = max(max_weight))
+
+
+
+##########################################################################
+# SPRINT
+##########################################################################
+
+# Get the top max speeds, max deceleration, and max acceleration
+top_speeds <- catapult %>%
+  group_by(`Player Name`) %>%
+  summarise(max_speed = max(`Top Speed (mph)`),
+            max_acceleration = max(`Max Acceleration (mph/s)`),
+            max_deceleration = max(`Max Deceleration (mph/s)`)
+            )
+
+
+# Get the top and avereage max speeds, max deceleration, and max acceleration
+all_speeds <- catapult %>%
+  group_by(`Player Name`) %>%
+  summarise(max_speed = max(`Top Speed (mph)`),
+            max_acceleration = max(`Max Acceleration (mph/s)`),
+            max_deceleration = max(`Max Deceleration (mph/s)`),
+            mean_speed = mean(`Top Speed (mph)`),
+            mean_acceleration = mean(`Max Acceleration (mph/s)`),
+            mean_deceleration = mean(`Max Deceleration (mph/s)`),
+
+  )
+  
+##########################################################################
+# COMBINE
+##########################################################################
+# Change the athlete dataframe to wide so it can be merged with the sprinting dataframe
+athlete_summary_max_adj <- athlete_summary %>% select(-max_weight)
+athlete_summary_max <- athlete_summary %>% select(-max_weight_rep_adjusted)
+
+athlete_summary_max_adj_wide <- athlete_summary_max_adj %>%
+  pivot_wider(names_from = `Exercise Name`,
+              values_from = max_weight_rep_adjusted)
+
+
+athlete_summary_max_wide <- athlete_summary_max %>%
+  pivot_wider(names_from = `Exercise Name`,
+              values_from = max_weight)
+
+# Clean 0 to nas so it doesn't skew data
+athlete_summary_max_adj_wide[athlete_summary_max_adj_wide == 0] <- NA
+athlete_summary_max_wide[athlete_summary_max_wide == 0] <- NA
+
+
+
+
+all_speeds_vs_adjusted_weights <- all_speeds %>%
+  left_join(athlete_summary_max_adj_wide)
+
+
+# Remove columns with less than 5 non NAs
+na_cols <- colSums(is.na(all_speeds_vs_adjusted_weights))
+row_count <- nrow(all_speeds_vs_adjusted_weights)
+non_na_cols <- 25 - na_cols
+columns_to_keep <- non_na_cols > 5
+
+speeds_vs_adjusted_weights_data <- all_speeds_vs_adjusted_weights[, columns_to_keep]
+  
+
+speeds_vs_adjusted_weights_data_only <- speeds_vs_adjusted_weights_data %>% select(-`Player Name`)
+
+
+correlations <- cor(speeds_vs_adjusted_weights_data_only, use="complete.obs")
+
+
+
+```
+# speeds_vs_adjusted_weights_data <- all_speeds_vs_adjusted_weights[, columns_to_keep]
+  
+
+# speeds_vs_adjusted_weights_data_only <- speeds_vs_adjusted_weights_data %>% select(-`Player Name`)
+
+
+# correlations <- cor(speeds_vs_adjusted_weights_data_only, use="complete.obs")
+
+```{r}
+ggcorrplot(correlations, hc.order = TRUE, 
+           type = "upper", 
+           lab = TRUE, 
+           lab_size = 3, 
+           method = "square",
+           colors = c("tomato2", "white", "springgreen3"),
+           title= "Correlogram of Team Builder and Catapult Data")
+```
+
+```{r}
+# SQUATS
+ggplot(speeds_vs_adjusted_weights_data, aes(max_speed, `Barbell Back Squat`)) +
+  geom_point() + 
+  geom_text_repel(aes(label = `Player Name`)) +
+  geom_smooth(method=lm)+
+  xlim(18, 20)+
+  ylim(150, 275)
+```
+
+
+  
+```{r}
+
+ggplot(speeds_vs_adjusted_weights_data, aes(max_acceleration, `Barbell Back Squat`)) +
+  geom_point() + 
+  geom_text_repel(aes(label = `Player Name`)) +
+  geom_smooth(method=lm)+
+  xlim(12, 16)+
+  ylim(150, 275)
+```
+
+```{r}
+
+ggplot(speeds_vs_adjusted_weights_data, aes(max_deceleration, `Barbell Back Squat`)) +
+  geom_point() + 
+  geom_text_repel(aes(label = `Player Name`)) +
+  geom_smooth(method=lm)+
+  xlim(12, 21)+
+  ylim(150, 275)
+```
+
+
+```{r}
+# DEADLIFTS
+ggplot(speeds_vs_adjusted_weights_data, aes(max_speed, `Barbell Deadlift`)) +
+  geom_point() + 
+  geom_text_repel(aes(label = `Player Name`)) +
+  geom_smooth(method=lm)+
+  xlim(17.5, 20.5)+
+  ylim(150, 350)
+```
+
+```{r}
+ggplot(speeds_vs_adjusted_weights_data, aes(max_acceleration, `Barbell Deadlift`)) +
+  geom_point() + 
+  geom_text_repel(aes(label = `Player Name`)) +
+  geom_smooth(method=lm)+
+  xlim(13.5, 16.5)+
+  ylim(150, 350)
+```
+
+```{r}
+ggplot(speeds_vs_adjusted_weights_data, aes(max_deceleration, `Barbell Deadlift`)) +
+  geom_point() + 
+  geom_text_repel(aes(label = `Player Name`)) +
+  geom_smooth(method=lm)
+```
